@@ -1,0 +1,111 @@
+#!/bin/bash
+
+OPTIONS_SPEC="\
+git xargs [options] <command>...
+
+Run an xargs command which receives as input all of the matching files in the
+current git repository.
+
+This uses git grep to locate the files. Thus the set to work on can be filtered
+down either by specifying a pattern to search the files with, or by specifying
+pathspecs to filter the files themselves on.
+
+NOTE: Pay careful attention to the single character options you are using.
+xargs makes use of a lot of very useful letters and so careful choices needed
+to be made as to who gets what.
+--
+  Match Options
+
+e,exclude!=pattern \
+  Adds a pathspec of the form ':(exclude,glob)pattern' to the list of pathspecs.
+g,grep!=pattern \
+  Run only on files that match the specified regex.
+i,include!=pattern \
+  Adds a pathspec of the form ':(glob)pattern' to the list of pathspecs.
+p,pathspec!=pathspec \
+  Run only on files that match the specified pathspec. Can be specified multiple times.
+
+  xargs Options (passed through unchanged)
+
+I!=replace-string \
+  Replace occurrences of replace-str with matching filenames. Implies -L 1 and -x.
+L!=max-lines \
+  Use at most max-lines matching files per command line.
+n,max-args!=max-args \
+  Use at most max-args arguments per command line.
+P,max-procs!=max-procs \
+  Run up to max-procs processes at a time.
+o,open-tty! \
+  Reopen stdin as /dev/tty in the child process.
+interactive! \
+  Prompt the user to confirm each command line before running it.
+process-slot-var!=name \
+  Set environment variable name to a unique value in each child process.
+r,no-run-if-empty! \
+  Don't run the command if the input is completely empty.
+s,max-chars!=max-chars \
+  Use at most max-chars characters per command line.
+t,verbose! \
+  Print each command line to stderr before executing it.
+x,exit! \
+  Exit if the size is exceeded.
+"
+SUBDIRECTORY_OK=true
+
+main() {
+  # official git script setup tools.
+  source "$(git --exec-path)/git-sh-setup"
+
+  require_work_tree
+
+  # git grep -l returns paths relative to the root regardless of where you are
+  # so we want to move there
+  cd_to_toplevel
+
+  local grepRegex="^"
+  local pathspec=( )
+  local -a xargsOptions=( )
+  while [[ "$#" > 0 ]]; do
+    case "$1" in
+      -p|--pathspec)
+        shift
+        pathspec+=( "$1" )
+      ;;
+
+      -i|--include)
+        shift
+        pathspec+=( ":(glob)$1" )
+      ;;
+
+      -e|--exclude)
+        shift
+        pathspec+=( ":(exclude,glob)$1" )
+      ;;
+
+      -g|--grep)
+        shift
+        grepRegex="$1"
+      ;;
+
+      -I|-L|-n|--max-args|-P|--max-procs|--process-slot-var|-s|--max-chars)
+        xargsOptions+=( "$1" "$2" )
+        shift
+      ;;
+      --)
+        # end of options
+        shift
+        break
+      ;;
+
+      *)
+        # the only valid remaining flags must be more xargs options
+        xargsOptions+=( "$1" )
+      ;;
+    esac
+    shift
+  done
+
+  git grep -zlE "$grepRegex" -- "${pathspec[@]}" | xargs -0 "${xargsOptions[@]}" -- "$@"
+}
+
+main "$@"
