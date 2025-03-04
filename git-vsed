@@ -19,45 +19,47 @@ ENVIRONMENT VARIABLES
     environment variable to fix that.
 --
 d,delim!=delim set the delimeter used in the vim s command. Defaults to %.
-G=option specify an additional option for the initial git grep.
+e,exclude!=pattern \
+  Adds a pathspec of the form ':(exclude,glob)pattern' to the list of pathspecs.
+i,include!=pattern \
+  Adds a pathspec of the form ':(glob)pattern' to the list of pathspecs.
+p,pathspec!=pathspec \
+  Run only on files that match the specified pathspec. Can be specified multiple times.
 "
+OPTIONS_STUCKLONG=true
 SUBDIRECTORY_OK=true
 
+# run our version of git-xargs regardless of whether it is in the path or not.
+git-xargs() {
+  # Fetch the directory of the current source file, we don't care if it is
+  # relative or not as we will use it immediately.
+  local -r SOURCE_DIRECTORY="$(dirname -- ${BASH_SOURCE[0]})"
+
+  "$SOURCE_DIRECTORY/git-xargs" "$@"
+}
+
 main() {
-  # official git script setup tools.
   source "$(git --exec-path)/git-sh-setup"
 
   require_work_tree
 
-  # git grep -l returns paths relative to the root regardless of where you are
-  # so we want to move there
-  cd_to_toplevel
-
   local d="%"
-  local grepOptions=( )
+  local xargsOptions=( )
 
   while [[ "$#" > 0 ]]; do
     case "$1" in
-      -d|--delim)
-        shift
-        d="$1"
-      ;;
-
-      -G)
-        shift
-        grepOptions+=( "$1" )
+      --delim=*)
+        # extract the suffix/argument which is everything after the first =
+        d="${1#*=}"
       ;;
 
       --)
-        # this denotes the end of option parsing and the start of the
-        # positional arguments.
         shift
         break
       ;;
 
       *)
-        # invalid option found
-        usage
+        xargsOptions+=( "$1" )
       ;;
     esac
     shift
@@ -80,7 +82,7 @@ main() {
   # The | update at the end makes vim save only the modified files.
   local vimCommand="argdo %s${d}\\v${search}${d}${replacement}${d}gc | update"
 
-  git grep -zlE "${grepOptions[@]}" "$search" | xargs -o -0 "$VIM_BIN" -c "$vimCommand"
+  git-xargs -o "${xargsOptions[@]}" -g "$search" -- "$VIM_BIN" -c "$vimCommand"
 }
 
 main "$@"
