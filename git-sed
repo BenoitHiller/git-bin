@@ -1,17 +1,52 @@
 #!/bin/bash
 
-# Run the specified sed expression on all files tracked by git in the current
-# repository.
-#
-# args:
-# 1.expression the expression passed to sed
-# 2.grepMatcher (optional) a regex passed to git grep to constrain the files
-#   modified further.
-main() {
-  local -r expression="$1"
-  local -r grepMatcher="${2:-^}"
+GSED_BIN="${GSED_BIN:-sed}"
 
-  git grep -zlE "$grepMatcher" | xargs -0 sed -Ei "$expression"
+USAGE="<sed_expression> [grep_arguments]..."
+LONG_USAGE="\
+git-sed runs the specified sed expression on every file in the current
+repository.
+
+If additional [grep_arguments] are provided they will be passed to git grep to
+filter the file list that sed receives. The arguments you provide will be
+passed to git grep as follows:
+
+    git grep -zlE \"\${grep_arguments[@]}\"
+
+IMPORTANT: This means that if you specify any additional grep flags, you will
+need to provide a regex to match. So if you are providing other arguments to
+filter the searched files and simply want to match every file you will want to
+specify a pattern that matches everything like \".\".
+
+ENVIRONMENT VARIABLES
+
+\$GSED_BIN default: \"sed\"
+    specifies the name of the sed executable used for gnu sed. I've needed this
+    in the past when I've used OSX and had GNU tools set up, but not replacing
+    the default ones due to some incompatibilities. In this case there are
+    differences in how the default sed on OSX doesn't let you do an in-place
+    replacement without specifying a backup suffix.
+"
+SUBDIRECTORY_OK=true
+
+main() {
+  # official git script setup tools. This handles parsing the -h option.
+  source "$(git --exec-path)/git-sh-setup"
+
+  require_work_tree
+
+  # git grep -l returns paths relative to the root regardless of where you are
+  # so we want to move there
+  cd_to_toplevel
+
+  local -r expression="$1"
+  local -a grepArguments=( "${@:2}" )
+
+  # If no grep arguments are provided set the array to include a pattern that
+  # matches all lines.
+  grepArguments=( "${grepArguments[@]:-^}" )
+
+  git grep -zlE "${grepArguments[@]}" | xargs -0 "$GSED_BIN" -Ei "$expression"
 }
 
 main "$@"
