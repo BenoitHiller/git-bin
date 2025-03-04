@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Run a vim substitution on all files tracked by git in the current repository.
+#
+# Note: technically git-grep is used to filter the files first so that vim
+# isn't literally opening every file in the entire project.
+#
+# args:
+# 1.search the search regex
+# 2.replacement the replacement string
+# 3.d (optional, default="%") the delimeter used when constructing the vim
+#   substitution. Note / is not used as the default because of just how often it
+#   appears within code.
+main() {
+  local -r search="$1"
+  local -r replacement="$2"
+  # I don't like abbreviating this but with the usage below the abbreviation
+  # seems justified, as it keeps the substitution expression readable.
+  local -r d="${3:-%}"
+
+  # argdo runs a specified command on every file that was passed in the
+  # arguments list when vim was started, which happens to be exactly what we
+  # want.
+  #
+  # Note that we are already adding the \v into the vim regex to turn on magic
+  # mode and get behaviour that matches more closely with grep -E.
+  local vimCommand="argdo %s${d}\\v${search}${d}${replacement}${d}gc | update"
+
+  git grep -zlE "$search" | xargs -o -0 vim -c "$vimCommand"
+}
+
+main "$@"
