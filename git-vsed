@@ -1,22 +1,74 @@
 #!/bin/bash
 
-# Run a vim substitution on all files tracked by git in the current repository.
-#
-# Note: technically git-grep is used to filter the files first so that vim
-# isn't literally opening every file in the entire project.
-#
-# args:
-# 1.search the search regex
-# 2.replacement the replacement string
-# 3.d (optional, default="%") the delimeter used when constructing the vim
-#   substitution. Note / is not used as the default because of just how often it
-#   appears within code.
+VIM_BIN="${VIM_BIN:-vim}"
+OPTIONS_SPEC="\
+git vsed [options] <search> <replacement>
+
+Performs a vim substitution with confirmation on all files tracked by git in
+the current respository.
+
+Note: technically git-grep is used to filter the files first so that vim isn't
+literally opening every file in the entire project.
+
+ENVIRONMENT VARIABLES
+
+\$VIM_BIN default: vim
+    Sets the vim used by this program. This is needed because this is a bash
+    script, so if you are using zsh and configured an alias for nvim this
+    script isn't going to find it and you will want to configure this
+    environment variable to fix that.
+--
+d,delim!=delim set the delimeter used in the vim s command. Defaults to %.
+G=option specify an additional option for the initial git grep.
+"
+SUBDIRECTORY_OK=true
+
 main() {
+  # official git script setup tools.
+  source "$(git --exec-path)/git-sh-setup"
+
+  require_work_tree
+
+  # git grep -l returns paths relative to the root regardless of where you are
+  # so we want to move there
+  cd_to_toplevel
+
+  local d="%"
+  local grepOptions=( )
+
+  while [[ "$#" > 0 ]]; do
+    case "$1" in
+      -d|--delim)
+        shift
+        d="$1"
+      ;;
+
+      -G)
+        shift
+        grepOptions+=( "$1" )
+      ;;
+
+      --)
+        # this denotes the end of option parsing and the start of the
+        # positional arguments.
+        shift
+        break
+      ;;
+
+      *)
+        # invalid option found
+        usage
+      ;;
+    esac
+    shift
+  done
+
+  if [[ "$#" < 2 ]]; then
+    usage
+  fi
+
   local -r search="$1"
   local -r replacement="$2"
-  # I don't like abbreviating this but with the usage below the abbreviation
-  # seems justified, as it keeps the substitution expression readable.
-  local -r d="${3:-%}"
 
   # argdo runs a specified command on every file that was passed in the
   # arguments list when vim was started, which happens to be exactly what we
@@ -24,9 +76,11 @@ main() {
   #
   # Note that we are already adding the \v into the vim regex to turn on magic
   # mode and get behaviour that matches more closely with grep -E.
+  #
+  # The | update at the end makes vim save only the modified files.
   local vimCommand="argdo %s${d}\\v${search}${d}${replacement}${d}gc | update"
 
-  git grep -zlE "$search" | xargs -o -0 vim -c "$vimCommand"
+  git grep -zlE "${grepOptions[@]}" "$search" | xargs -o -0 "$VIM_BIN" -c "$vimCommand"
 }
 
 main "$@"
