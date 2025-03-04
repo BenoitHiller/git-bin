@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Run the specified sed expression on all files tracked by git in the current
+# repository.
+#
+# args:
+# 1.expression the expression passed to sed
+# 2.grepMatcher (optional) a regex passed to git grep to constrain the files
+#   modified further.
+main() {
+  local -r expression="$1"
+  local -r grepMatcher="${2:-^}"
+
+  git grep -zlE "$grepMatcher" | xargs -0 sed -Ei "$expression"
+}
+
+main "$@"
