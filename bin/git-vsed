@@ -80,7 +80,7 @@ main() {
   # mode and get behaviour that matches more closely with grep -E.
   #
   # The | update at the end makes vim save only the modified files.
-  local vimCommand="argdo %s${d}\\v${search}${d}${replacement}${d}gc | update"
+  local vimCommand="argdo set eventignore-=Syntax | %s${d}\\v${search}${d}${replacement}${d}gc | update"
 
   git-xargs -o "${xargsOptions[@]}" -g "$search" -- "$VIM_BIN" -c "$vimCommand"
 }
